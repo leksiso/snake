@@ -1,0 +1,36 @@
+// A PIO program that's been built by modifying the ws2812.pio
+// file from the official pico examples.
+
+.program ledmatrix
+.side_set 1
+
+.define public T1 8     ; ~T0H = T1H-T0H
+.define public T2 9     ; ~T1L
+
+.wrap_target
+bitloop:
+    out x, 1       side 0 [T2 - 1] ; Side-set still takes place when instruction stalls
+    jmp !x do_zero side 1 [T1 - 1] ; Branch on the bit we shifted out. Positive pulse
+do_one:
+    jmp  bitloop   side 1 [T1 - 1] ; Continue driving high, for a long pulse
+do_zero:
+    nop            side 0 [T1 - 1] ; Or drive low, for a short pulse
+.wrap
+
+
+% c-sdk {
+static inline void ledmatrix_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_gpio_init(pio, pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    pio_sm_config config = ledmatrix_program_get_default_config(offset);
+    sm_config_set_sideset_pins(&config, pin);
+    sm_config_set_out_shift(&config, false, true, 24);
+    sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_TX);
+
+    sm_config_set_clkdiv_int_frac(&config, 6, 64);  // clock_div = 6.25 --> cycle_length = 50ns
+
+    pio_sm_init(pio, sm, offset, &config);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
