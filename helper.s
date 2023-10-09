@@ -2,6 +2,7 @@
 .global pio0_sm0_put_blocking
 .global byte_to_coords
 .global coords_to_byte
+.global get_random_byte
 
 .equ KEY_LEFT, 10
 .equ KEY_UP, 11

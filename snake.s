@@ -23,31 +23,40 @@ main:
     mov     r1, #1
     bl      coords_to_byte
     strb    r0, [r5]
+    mov     r0, #0
+    strb    r0, [r5, #1]
+
     mov     r0, #3
     mov     r1, #2
     bl      coords_to_byte
-    strb    r0, [r5, #1]
+    strb    r0, [r5, #2]
+    mov     r0, #1
+    strb    r0, [r5, #3]
+
     mov     r0, #3
     mov     r1, #3
     bl      coords_to_byte
-    strb    r0, [r5, #2]
+    strb    r0, [r5, #4]
+    mov     r0, #2
+    strb    r0, [r5, #5]
 
     mov     r0, #(SNAKE_INITIAL_LENGTH -1)
     ldr     r6, =head_index
     strb    r0, [r6]
-    @ &tail_index = &head_index +1
-    @ tail_index = 0 (as initialized in the data section)
+
     mov     r7, #SNAKE_INITIAL_LENGTH   @ snake length
 
-    @bl      update_treat_position
+    bl      update_treat_position
+
 
 loop:
     ldr     r4, =direction
     ldrb    r4, [r4]
 
     ldrb    r3, [r6]
-    ldrb    r0, [r5, r3]    @ head
-    bl      byte_to_coords
+    lsl     r3, #1
+    ldrb    r0, [r5, r3]          @ head.coords
+    bl      byte_to_coords        @ r0: head_x, r1: head_y
 
 @main_switch_statement:
     cmp     r4, #DIR_LEFT
@@ -71,21 +80,63 @@ main_switch_up:
 main_switch_right:
     add     r0, #1 
 main_end_switch:
-    bl      coords_to_byte
-    ldrb    r3, [r6, #1]       @ tail
-    strb    r0, [r5, r3]
-    add     r3, #1
-    cmp     r3, r7             @ if new_tail_idx == snake.length --> new_tail_idx = 0
+    bl      coords_to_byte        @ r0: (head_x, head_y)
+
+    @ check if new head is a treat or a wall tile.
+    mov     r4, r0
+
+    bl      byte_to_coords
+    bl      coords_to_tile_id
+    bl      is_treat_tile
+    cmp     r0, #0          @ if treat tile -> increase length and get new treat pos
+    beq     1f
+    bl      update_treat_position
+
+    @ prepare a new snake node
+    lsl     r3, r7, #1
+    add     r3, r5
+    strb    r4, [r3]       @ write new head coords
+    strb    r7, [r3, #1]   @ set new_head.tail_counter
+
+    strb    r7, [r6]       @ point head_index to this new head
+    add     r7, #1         @ increase snake length
+    b       main_ready_to_show_scene
+
+1:  @ TODO: check if new head is a wall tile
+
+    @ overwrite current tail with new head and update
+    @ iterate over the snake array and decrease tail_counter ↓↓
+        @ if snake[i].tail_counter == 0
+            @ set tail_index = i
+            @ set snake[i].tail_counter = snake_length -1
+        @ else
+            @ snake[i].tail_counter -= 1
+    mov     r0, #0          @ i
+main_tail_counter_loop:
+    lsl     r1, r0, #1
+    add     r1, r5, r1      @ &snake[i]
+    ldrb    r2, [r1, #1]    @ snake[i].tail_counter
+    cmp     r2, #0
     bne     1f
-    mov     r3, #0
-1:  strb    r3, [r6, #1]       @ update head_idx as well
-    ldrb    r3, [r6]
-    add     r3, #1
-    cmp     r3, r7
-    bne     1f
-    mov     r3, #0
-1:  strb    r3, [r6]
-    
+    mov     r3, r0          @ tail_index = i
+
+    sub     r2, r7, #1
+    strb    r2, [r1, #1]    @ snake[i].tail_counter = snake_length -1
+    b main_tail_counter_loop_condition
+1:  
+    sub     r2, #1
+    strb    r2, [r1, #1] 
+main_tail_counter_loop_condition:
+    add     r0, #1
+    cmp     r0, r7          @ i < snake_length
+    blo     main_tail_counter_loop
+@ main_tail_counter_loop_end
+    @ tail_index: r3
+    lsl     r0, r3, #1
+    strb    r4, [r5, r0]       @ snake[tail_idx].coords = new_head.coords
+    strb    r3, [r6]           @ new head index
+
+main_ready_to_show_scene:
     mov     r0, r5
     mov     r1, r7
     bl      show_scene
@@ -96,7 +147,7 @@ main_end_switch:
 
 
 @ r0: snake 
-@ r1: snake_length
+@ r1: snake_length
 show_scene:
     push    {r4, r5, r6, r7, lr}
     mov     r4, #0       @ loop counter
@@ -146,7 +197,7 @@ treat_color: .word (0x010100 << 8)
 
 @ r0: tile_id
 is_wall_tile:
-    @ if (tile_id % 16) or (tile_id+1 % 16) or (tile_id < 16) or (tile_id >= 240) -> tile is wall
+    @ if (tile_id % 16) or (tile_id+1 % 16) or (tile_id < 16) or (tile_id >= 240) -> the tile is a wall
     mov     r3, #0x0f
     and     r3, r0
     beq     is_wall_tile_true    @ least significant bits 0000
@@ -163,13 +214,40 @@ is_wall_tile_true:
     mov     r0, #1
     bx      lr
 
+@ no params
+@ updates treat_postition_x and treat_postition_y
+@ no return value
+update_treat_position:
+    push    {r4-r7, lr}
+1:  bl      get_random_byte
+    bl      byte_to_coords
+    mov     r4, r0
+    mov     r5, r1
+    bl      coords_to_tile_id
+    bl      is_wall_tile        @ TODO: also check if is_snake_tile
+    cmp     r0, #0
+    bne     1b
+    ldr     r2, =treat_postition_x
+    strb    r4, [r2]
+    ldr     r2, =treat_postition_y
+    strb    r5, [r2]
+    pop     {r4-r7, pc}
 
 @   r0: x coord
 @   r1: y coord
 @ returns:
 @   r0: led matrix tile id
-coords_to_tile_id
+coords_to_tile_id:
+    mov     r2, #1
+    tst     r1, r2          @ test if row index is odd...
+    beq     1f
+    mov     r2, #15
+    sub     r0, r2, r0      @ ...and "mirror" the x coord if it is
+1:  mov     r2, #16
+    mul     r1, r2
+    add     r0, r1
     bx      lr
+
 
 
 @ r0: tile_id
@@ -179,29 +257,19 @@ is_snake_tile:
     push    {r4-r7, lr}
     mov     r4, r0      @ tile_id
     mov     r5, r2
-    mov     r6, #0
+    mov     r6, #0      @ i
     mov     r7, r1
 is_snake_tile_for_loop:
-    mov     r0, #0      @ return 0 if flase
-    cmp     r6, r5
+    mov     r0, #0      @ not a snake tile -> return 0
+    cmp     r6, r5      @ i >= snake_length ?
     bhs     is_snake_tile_for_loop_end
-    ldrb    r0, [r7, r6]
+    lsl     r1, r6, #1
+    ldrb    r0, [r7, r1]     @ r0 = snake[i].coords
     bl      byte_to_coords   @ r0: x, r1: y
-    @ add 1 to both coords to take the walls into account
-    add     r0, #1
-    add     r1, #1
-    lsr     r3, r4, #4      @ test if row index is odd...
-    mov     r2, #1
-    tst     r3, r2
-    beq     1f
-    mov     r2, #15
-    sub     r0, r2, r0      @ ...and "mirror" the x coord if it is
-1:  mov     r2, #16
-    mul     r1, r2
-    add     r0, r1
-    cmp     r4, r0
+    bl      coords_to_tile_id
+    cmp     r4, r0          @ snake_tile_id != tile_id
     bne     2f
-    @is_snake_tile_true:
+@is_snake_tile_true:
     mov     r0, #1
     b       is_snake_tile_for_loop_end
 2:  add     r6, #1
@@ -212,21 +280,21 @@ is_snake_tile_for_loop_end:
 
 @ r0: tile_id
 is_treat_tile:
+    push    {r4-r7, lr}
+    mov     r4, r0  @ tile_id
 
-@ TODO: 
-@   extract coords_to_tile_id from is_snake_tile
-@   get treat_tile_id
-@   if treat_tile_id == tile_id
-@     return true
-@   else
-@     return false
-    cmp     r0, #60
+    ldr     r0, =treat_postition_x
+    ldrb    r0, [r0]
+    ldr     r1, =treat_postition_y
+    ldrb    r1, [r1]
+    bl      coords_to_tile_id
+    cmp     r4, r0
     beq     1f
     mov     r0, #0
-    bx      lr
+    pop     {r4-r7, pc}
 1:
     mov     r0, #1
-    bx      lr
+    pop     {r4-r7, pc}
 
 @ r0: pin
 @ r1: event
@@ -267,9 +335,9 @@ gpio_irq_handler_end_switch:
 
 
 .data
-snake: .space 196   @ [x1, y1, x2, y2...]
+@ snake: array of structs { coords: byte (x, y), tail_counter: byte)
+snake: .space 400 
 head_index: .byte 0
-tail_index: .byte 0
 treat_postition_x: .byte 1
 treat_postition_y: .byte 1
 direction: .byte DIR_UP
