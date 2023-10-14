@@ -8,6 +8,7 @@
 .equ KEY_UP, 11
 .equ KEY_DOWN, 12
 .equ KEY_RIGHT, 13
+.equ RESTART_BUTTON, 16
 .equ PIO_PIN, 15
 .equ GPIO_EVENT_RISING_EDGE, 8
 .equ TRUE, 1
@@ -39,6 +40,14 @@ initialize_hardware:
     mov     r2, #TRUE
     ldr     r3, =gpio_irq_handler
     bl      gpio_set_irq_enabled_with_callback
+
+
+    mov     r0, #RESTART_BUTTON
+    mov     r1, #GPIO_EVENT_RISING_EDGE
+    mov     r2, #TRUE
+    ldr     r3, =gpio_irq_handler
+    bl      gpio_set_irq_enabled_with_callback
+
 
     @ Initialize the PIO program for controlling the led matrix
     ldr     r0, pio0_base

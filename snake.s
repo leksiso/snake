@@ -7,6 +7,8 @@
 .equ KEY_UP, 12
 .equ KEY_RIGHT, 13
 
+.equ RESTART_BUTTON, 16
+
 .equ DIR_LEFT, 0
 .equ DIR_DOWN, 1
 .equ DIR_UP, 2
@@ -18,6 +20,21 @@
 main:
     bl      stdio_init_all
     bl      initialize_hardware
+restart:
+    ldr     r0, =do_restart
+    mov     r1, #0
+    strb    r1, [r0]
+
+    ldr     r0, =snake
+    mov     r1, #0
+    mov     r2, #200
+    lsl     r2, #1
+    bl      memset
+
+    ldr     r0, =direction
+    mov     r1, #DIR_UP
+    strb    r1, [r0]
+
     ldr     r5, =snake
     mov     r0, #3
     mov     r1, #1
@@ -47,10 +64,16 @@ main:
     mov     r7, #SNAKE_INITIAL_LENGTH   @ snake length
     mov     r0, r5
     mov     r1, r7
+    mov     r2, #0
     bl      update_treat_position
 
 
 loop:
+    ldr     r0, =do_restart
+    ldrb    r0, [r0]
+    cmp     r0, #0
+    bne     restart
+
     ldr     r4, =direction
     ldrb    r4, [r4]
 
@@ -108,7 +131,26 @@ main_end_switch:
     add     r7, #1         @ increase snake length
     b       main_ready_to_show_scene
 
-1:  @ TODO: check if new head is a wall tile
+1:
+    mov     r0, r4
+    bl      byte_to_coords
+    bl      coords_to_tile_id
+    bl      is_wall_tile
+    cmp     r0, #0
+    beq     1f
+    bl      stop
+    b       restart
+1:  mov     r0, r4
+    bl      byte_to_coords
+    bl      coords_to_tile_id
+    mov     r1, r5
+    mov     r2, r7
+    bl      is_snake_tile
+    cmp     r0, #0
+    beq     1f
+    bl      stop
+    b       restart
+1:
 
     @ overwrite current tail with new head and update
     @ iterate over the snake array and decrease tail_counter ↓↓
@@ -255,6 +297,14 @@ update_treat_position:
     strb    r1, [r2]
     pop     {r4-r7, pc}
 
+
+stop:
+    ldr     r0, =do_restart
+    ldrb    r0, [r0]
+    cmp     r0, #0
+    beq     stop
+    bx      lr
+
 @   r0: x coord
 @   r1: y coord
 @ returns:
@@ -332,6 +382,8 @@ gpio_irq_handler:
     beq     gpio_irq_handler_switch_down
     cmp     r0, #KEY_RIGHT
     beq     gpio_irq_handler_switch_right
+    cmp     r0, #RESTART_BUTTON
+    beq     gpio_irq_handler_switch_restart
     b       gpio_irq_handler_end_switch
 gpio_irq_handler_switch_left:
     ldr     r0, =direction
@@ -352,6 +404,11 @@ gpio_irq_handler_switch_right:
     ldr     r0, =direction
     mov     r1, #DIR_RIGHT
     strb    r1, [r0]
+    b       gpio_irq_handler_end_switch
+gpio_irq_handler_switch_restart:
+    ldr     r0, =do_restart
+    mov     r1, #1
+    strb    r1, [r0]
 gpio_irq_handler_end_switch:
     pop     {pc}
 
@@ -362,6 +419,6 @@ snake: .space 400
 head_index: .byte 0
 treat_postition_x: .byte 1
 treat_postition_y: .byte 1
+do_restart: .byte 0
 direction: .byte DIR_UP
-print_num: .asciz "%d\n"
 
