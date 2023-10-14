@@ -88,11 +88,14 @@ main_end_switch:
 
     bl      byte_to_coords
     bl      coords_to_tile_id
+    push    {r0}
     bl      is_treat_tile
+    pop     {r2}
     cmp     r0, #0          @ if treat tile -> increase length and get new treat pos
     beq     1f
     mov     r0, r5
     mov     r1, r7
+    @       r2 = tile_id
     bl      update_treat_position
 
     @ prepare a new snake node
@@ -219,32 +222,37 @@ is_wall_tile_true:
 
 @ r0, snake
 @ r1, snake_length
+@ r2, previous treat tile_id
 @ updates treat_postition_x and treat_postition_y
 @ no return value
 update_treat_position:
     push    {r4-r7, lr}
-    mov     r6, r0
-    mov     r7, r1
+    mov     r6, r0      @ snake
+    mov     r7, r1      @ snake_length
+    mov     r5, r2      @ previous_tile_id
 1:  bl      get_random_byte
+    mov     r4, r0      @ random byte
     bl      byte_to_coords
-    mov     r4, r0
-    mov     r5, r1
     bl      coords_to_tile_id
+    cmp     r5, r0
+    beq     1b
     bl      is_wall_tile
     cmp     r0, #0
     bne     1b
     mov     r0, r4
-    mov     r1, r5
+    bl      byte_to_coords
     bl      coords_to_tile_id
     mov     r1, r6
     mov     r2, r7
     bl      is_snake_tile
     cmp     r0, #0
     bne     1b
+    mov     r0, r4
+    bl      byte_to_coords
     ldr     r2, =treat_postition_x
-    strb    r4, [r2]
+    strb    r0, [r2]
     ldr     r2, =treat_postition_y
-    strb    r5, [r2]
+    strb    r1, [r2]
     pop     {r4-r7, pc}
 
 @   r0: x coord
