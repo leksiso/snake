@@ -387,21 +387,33 @@ gpio_irq_handler:
     b       gpio_irq_handler_end_switch
 gpio_irq_handler_switch_left:
     ldr     r0, =direction
+    ldrb    r2, [r0]
+    cmp     r2, #DIR_RIGHT  @ if currently going right, don't go left
+    beq     gpio_irq_handler_end_switch
     mov     r1, #DIR_LEFT
     strb    r1, [r0]
     b       gpio_irq_handler_end_switch
 gpio_irq_handler_switch_down:
     ldr     r0, =direction
+    ldrb    r2, [r0]
+    cmp     r2, #DIR_UP
+    beq     gpio_irq_handler_end_switch
     mov     r1, #DIR_DOWN
     strb    r1, [r0]
     b       gpio_irq_handler_end_switch
 gpio_irq_handler_switch_up:
     ldr     r0, =direction
+    ldrb    r2, [r0]
+    cmp     r2, #DIR_DOWN
+    beq     gpio_irq_handler_end_switch
     mov     r1, #DIR_UP
     strb    r1, [r0]
     b       gpio_irq_handler_end_switch
 gpio_irq_handler_switch_right:
     ldr     r0, =direction
+    ldrb    r2, [r0]
+    cmp     r2, #DIR_LEFT
+    beq     gpio_irq_handler_end_switch
     mov     r1, #DIR_RIGHT
     strb    r1, [r0]
     b       gpio_irq_handler_end_switch
