@@ -4,6 +4,11 @@ A snake game for the Raspberry Pi Pico written in ARM assembly.
 
 ### Demo video
 
+
+https://github.com/leksiso/snake/assets/68514429/f8af3ccf-473f-46bc-9c08-5a1de3f3102e
+
+
+
 ### Hardware parts
 
 <img src="res/schematic.png" width=500 alt="Breadboard wiring diagram" />
